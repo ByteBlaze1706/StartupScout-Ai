@@ -1,9 +1,12 @@
 import crypto from 'crypto';
 import { FileDbAdapter } from './fileDbAdapter';
+import { SupabaseDbAdapter } from './supabaseDbAdapter';
 import { DatabaseAdapter, UserRecord, SessionRecord, ProjectRecord } from './dbAdapter';
+import { supabase } from './supabase';
 
-// Instantiate the active database adapter (Supabase/Neon migration route ready)
-const db: DatabaseAdapter = new FileDbAdapter();
+// Instantiate the active database adapter dynamically.
+// Falls back to FileDbAdapter when Supabase credentials are not configured in local development.
+const db: DatabaseAdapter = supabase ? new SupabaseDbAdapter() : new FileDbAdapter();
 
 // Cryptographic Password Hashing (scrypt)
 const generateSalt = (): string => {
@@ -186,9 +189,6 @@ export const serverDb = {
     const fifteenDays = 1000 * 60 * 60 * 24 * 15;
     if (timeRemaining < fifteenDays) {
       session.expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString();
-      await db.updateUser(session as any); // Wait, this should call db.createSession or update session
-      // Wait, let's make sure it updates the session!
-      // In dbAdapter, we have db.createSession(session). Since createSession overwrites by ID in FileDbAdapter, we can just call:
       await db.createSession(session);
     }
 
