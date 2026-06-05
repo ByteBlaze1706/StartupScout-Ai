@@ -16,19 +16,39 @@ export const metadata: Metadata = {
   metadataBase: process.env.VERCEL_URL 
     ? new URL(`https://${process.env.VERCEL_URL}`) 
     : new URL("http://localhost:3000"),
-  title: "StartupScout AI",
-  description: "Validate startup ideas using AI-powered market research, competitor analysis, and strategic recommendations.",
+  title: {
+    default: "StartupScout.AI — Validate Startup Ideas",
+    template: "%s | StartupScout.AI",
+  },
+  description: "AI-powered startup validation and market intelligence platform.",
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.png", type: "image/png" }
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
   openGraph: {
-    title: "StartupScout AI",
-    description: "Validate startup ideas using AI-powered market research, competitor analysis, and strategic recommendations.",
-    siteName: "StartupScout AI",
+    title: "StartupScout.AI",
+    description: "AI-powered startup validation and market intelligence platform.",
+    siteName: "StartupScout.AI",
     locale: "en_US",
     type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "StartupScout.AI",
+      }
+    ]
   },
   twitter: {
     card: "summary_large_image",
-    title: "StartupScout AI",
-    description: "Validate startup ideas using AI-powered market research, competitor analysis, and strategic recommendations.",
+    title: "StartupScout.AI",
+    description: "AI-powered startup validation and market intelligence platform.",
+    images: ["/twitter-image.png"],
   },
   robots: {
     index: true,

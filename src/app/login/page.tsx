@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Zap, Mail, Lock, User, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { auth } from '@/lib/auth';
@@ -60,20 +59,6 @@ export default function LoginPage() {
     }
   };
 
-  const handleDemoLogin = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const res = await auth.signIn('judge@startupscout.ai', 'demo1234');
-      if (res.success) {
-        router.push('/dashboard');
-      }
-    } catch (err) {
-      setError('Demo access failed');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-[#030307] text-[#f4f4f5] flex items-center justify-center px-4 relative overflow-hidden selection:bg-violet-500 selection:text-white">
@@ -233,22 +218,6 @@ export default function LoginPage() {
               >
                 {loading ? 'Processing...' : mode === 'login' ? 'Sign In' : 'Sign Up'}
                 <ArrowRight className="w-4 h-4" />
-              </button>
-
-              <div className="relative my-4 flex items-center justify-center">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-900" /></div>
-                <span className="relative px-3 text-[10px] text-zinc-500 uppercase bg-[#0d0d17] font-mono">For Hackathon Judges</span>
-              </div>
-
-              {/* High-visibility demo log-in */}
-              <button
-                type="button"
-                onClick={handleDemoLogin}
-                disabled={loading}
-                className="w-full py-3 rounded-xl border border-dashed border-violet-500/30 hover:border-violet-400 bg-violet-950/10 hover:bg-violet-950/20 text-xs font-bold text-violet-400 transition-all flex items-center justify-center gap-2"
-              >
-                <Zap className="w-4 h-4 animate-bounce" />
-                <span>Instant YC-Grade Demo Access</span>
               </button>
 
               <div className="text-center mt-3">
