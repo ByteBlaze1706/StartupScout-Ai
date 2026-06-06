@@ -240,9 +240,54 @@ export const exportReportToPDF = (project: DBProject) => {
   doc.text(mktText, margin, y);
   y += (mktText.length * 4.5) + 8;
 
-  // TAM / SAM / SOM Table Card
+  // Calculate row layout details beforehand
+  const tamSamSom = [
+    { name: 'TAM (Total Addressable Market)', val: report.marketSize, def: 'Entire potential global demand for your core category.' },
+    { name: 'SAM (Serviceable Addressable Market)', val: `$${(parseFloat(report.marketSize.replace(/[^0-9.]/g, '')) * 0.15 || 1.8).toFixed(1)} Billion`, def: 'Segment of TAM targeted by your specific products/geography.' },
+    { name: 'SOM (Serviceable Obtainable Market)', val: `$${(parseFloat(report.marketSize.replace(/[^0-9.]/g, '')) * 0.02 || 0.25).toFixed(1)} Billion`, def: 'Market share you can capture realistically within 3 years.' }
+  ];
+
+  const preparedRows = tamSamSom.map(row => {
+    // Metric wrapping
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    const metricLines = doc.splitTextToSize(row.name, 32);
+
+    // Value font scaling & wrapping
+    let valFontSize = 8;
+    if (row.val.length > 30) {
+      valFontSize = 6;
+    } else if (row.val.length > 18) {
+      valFontSize = 7;
+    }
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(valFontSize);
+    const valueLines = doc.splitTextToSize(row.val, 32);
+
+    // Definition wrapping
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    const defLines = doc.splitTextToSize(row.def, 86);
+
+    const maxLines = Math.max(metricLines.length, valueLines.length, defLines.length);
+    const rowHeight = (maxLines * 4.2) + 3; // 4.2mm per line + 3mm padding
+
+    return {
+      metricLines,
+      valueLines,
+      defLines,
+      valFontSize,
+      rowHeight
+    };
+  });
+
+  const tableHeaderHeight = 22; // Height from card top to first row content
+  const tableRowsHeight = preparedRows.reduce((acc, r) => acc + r.rowHeight, 0);
+  const cardHeight = tableHeaderHeight + tableRowsHeight + 4; // 4mm padding at bottom
+
+  // Now draw the card background enclosing the table
   doc.setFillColor(248, 250, 252);
-  doc.rect(margin, y, contentWidth, 52, 'F');
+  doc.rect(margin, y, contentWidth, cardHeight, 'F');
   
   doc.setFont('Helvetica', 'bold');
   doc.setFontSize(9.5);
@@ -253,32 +298,41 @@ export const exportReportToPDF = (project: DBProject) => {
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139);
   doc.text('METRIC', margin + 6, y + 18);
-  doc.text('VALUE', margin + 45, y + 18);
-  doc.text('STRATEGIC DEFINITION', margin + 80, y + 18);
+  doc.text('VALUE', margin + 42, y + 18);
+  doc.text('STRATEGIC DEFINITION', margin + 78, y + 18);
   
   doc.setDrawColor(226, 232, 240);
   doc.line(margin + 6, y + 21, pageWidth - margin - 6, y + 21);
 
-  // Rows
-  const tamSamSom = [
-    { name: 'TAM (Total Addressable Market)', val: report.marketSize, def: 'Entire potential global demand for your core category.' },
-    { name: 'SAM (Serviceable Addressable Market)', val: `$${(parseInt(report.marketSize.replace(/[^0-9]/g, '')) * 0.15 || 1.8).toFixed(1)} Billion`, def: 'Segment of TAM targeted by your specific products/geography.' },
-    { name: 'SOM (Serviceable Obtainable Market)', val: `$${(parseInt(report.marketSize.replace(/[^0-9]/g, '')) * 0.02 || 0.25).toFixed(1)} Billion`, def: 'Market share you can capture realistically within 3 years.' }
-  ];
-
-  tamSamSom.forEach((row, i) => {
-    const rowY = y + 27 + (i * 8);
+  // Render rows
+  let rowY = y + 21; // start after header line
+  preparedRows.forEach((row) => {
+    // Col 1: Metric
     doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
     doc.setTextColor(30, 41, 59);
-    doc.text(row.name, margin + 6, rowY);
+    doc.text(row.metricLines, margin + 6, rowY + 4);
+
+    // Col 2: Value
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(row.valFontSize);
     doc.setTextColor(139, 92, 246);
-    doc.text(row.val, margin + 45, rowY);
+    doc.text(row.valueLines, margin + 42, rowY + 4);
+
+    // Col 3: Definition
     doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
     doc.setTextColor(71, 85, 105);
-    doc.text(row.def, margin + 80, rowY);
+    doc.text(row.defLines, margin + 78, rowY + 4);
+
+    rowY += row.rowHeight;
+    // Draw row separator line at the bottom of row
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(margin + 6, rowY, margin + contentWidth - 6, rowY);
   });
 
-  y += 62;
+  y += cardHeight + 8;
 
   // Growth Trend Card
   doc.setFillColor(255, 255, 255);
@@ -331,59 +385,138 @@ export const exportReportToPDF = (project: DBProject) => {
   doc.setFontSize(8);
   doc.setTextColor(255, 255, 255);
   doc.text('COMPETITOR', margin + 4, y + 5.5);
-  doc.text('FUNDING', margin + 45, y + 5.5);
-  doc.text('PRICING MODEL', margin + 80, y + 5.5);
-  doc.text('COMPETITIVE POSITION', margin + 115, y + 5.5);
+  doc.text('FUNDING', margin + 42, y + 5.5);
+  doc.text('PRICING MODEL', margin + 78, y + 5.5);
+  doc.text('COMPETITIVE POSITION', margin + 114, y + 5.5);
   y += 8;
 
-  report.competitors?.forEach((comp, idx) => {
-    // Alternating rows
+  const preparedCompetitors = report.competitors?.map(comp => {
+    // 1. Competitor Name wrap
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8.5);
+    const nameLines = doc.splitTextToSize(comp.name, 34);
+
+    // 2. Funding wrap & auto font-scale
+    let fundingFontSize = 8;
+    if (comp.funding.length > 25) fundingFontSize = 6.5;
+    else if (comp.funding.length > 15) fundingFontSize = 7;
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(fundingFontSize);
+    const fundingLines = doc.splitTextToSize(comp.funding, 32);
+
+    // 3. Pricing Model wrap & auto font-scale
+    let pricingFontSize = 8;
+    if (comp.pricing.length > 25) pricingFontSize = 6.5;
+    else if (comp.pricing.length > 15) pricingFontSize = 7;
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(pricingFontSize);
+    const pricingLines = doc.splitTextToSize(comp.pricing, 32);
+
+    // 4. Position wrap
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    const posLines = doc.splitTextToSize(comp.position, 50);
+
+    const maxLines = Math.max(nameLines.length, fundingLines.length, pricingLines.length, posLines.length);
+    const rowHeight = (maxLines * 4.2) + 4; // 4.2mm per line + 4mm padding
+
+    return {
+      comp,
+      nameLines,
+      fundingLines,
+      fundingFontSize,
+      pricingLines,
+      pricingFontSize,
+      posLines,
+      rowHeight
+    };
+  }) || [];
+
+  preparedCompetitors.forEach((row, idx) => {
+    // Alternating rows background
     doc.setFillColor(idx % 2 === 0 ? 255 : 248, idx % 2 === 0 ? 255 : 250, idx % 2 === 0 ? 255 : 252);
-    doc.rect(margin, y, contentWidth, 11, 'F');
+    doc.rect(margin, y, contentWidth, row.rowHeight, 'F');
 
-    doc.setDrawColor(241, 245, 249);
-    doc.line(margin, y + 11, margin + contentWidth, y + 11);
+    // Bottom border line
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(margin, y + row.rowHeight, margin + contentWidth, y + row.rowHeight);
 
+    // Render cells
+    // Col 1: Competitor Name
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor(30, 41, 59);
-    doc.text(comp.name, margin + 4, y + 7);
+    doc.text(row.nameLines, margin + 4, y + 4.5);
 
+    // Col 2: Funding
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(row.fundingFontSize);
+    doc.setTextColor(71, 85, 105);
+    doc.text(row.fundingLines, margin + 42, y + 4.5);
+
+    // Col 3: Pricing
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(row.pricingFontSize);
+    doc.setTextColor(71, 85, 105);
+    doc.text(row.pricingLines, margin + 78, y + 4.5);
+
+    // Col 4: Position
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105);
-    doc.text(comp.funding, margin + 45, y + 7);
-    doc.text(comp.pricing, margin + 80, y + 7);
-    
-    const posText = doc.splitTextToSize(comp.position, contentWidth - 120);
-    doc.text(posText, margin + 115, y + 7);
+    doc.text(row.posLines, margin + 114, y + 4.5);
 
-    y += 11;
+    y += row.rowHeight;
   });
 
   y += 10;
 
   // Positioning Grid Details
+  const preparedGrid = report.competitors?.slice(0, 3).map((comp) => {
+    const nameText = `${comp.name}:`;
+    
+    // Description wrap
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    const descLines = doc.splitTextToSize(comp.description, 125);
+
+    const rowHeight = Math.max(1, descLines.length) * 4.2 + 2;
+    return {
+      nameText,
+      descLines,
+      rowHeight
+    };
+  }) || [];
+
+  const gridHeaderHeight = 14;
+  const gridRowsHeight = preparedGrid.reduce((acc, r) => acc + r.rowHeight, 0);
+  const gridCardHeight = gridHeaderHeight + gridRowsHeight + 4;
+
   doc.setFillColor(248, 250, 252);
-  doc.rect(margin, y, contentWidth, 42, 'F');
+  doc.rect(margin, y, contentWidth, gridCardHeight, 'F');
 
   doc.setFont('Helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
   doc.text('Strategic Positioning Matrix Insights', margin + 6, y + 8);
 
-  doc.setFont('Helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(71, 85, 105);
-
-  let gridY = y + 16;
-  report.competitors?.slice(0, 3).forEach((comp, idx) => {
+  let currentGridY = y + 15;
+  preparedGrid.forEach((row) => {
     doc.setFont('Helvetica', 'bold');
-    doc.text(`${comp.name}:`, margin + 6, gridY);
+    doc.setFontSize(8);
+    doc.setTextColor(30, 41, 59);
+    doc.text(row.nameText, margin + 6, currentGridY);
+
     doc.setFont('Helvetica', 'normal');
-    doc.text(comp.description.length > 95 ? comp.description.substring(0, 92) + '...' : comp.description, margin + 35, gridY);
-    gridY += 8;
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text(row.descLines, margin + 35, currentGridY);
+
+    currentGridY += row.rowHeight;
   });
+
+  y += gridCardHeight + 10;
 
 
   // --- PAGE 5: SWOT ANALYSIS ---
@@ -447,12 +580,39 @@ export const exportReportToPDF = (project: DBProject) => {
 
   const persona = report.personas?.[0] || { name: 'Early Adopter Founder', age: 30, occupation: 'Product Lead', goals: ['Automate code validation', 'Fast prototypes'], painPoints: ['Too slow custom development', 'High designer bills'], motivations: ['Maximize output'], behavior: 'Active tech scout' };
 
+  // Calculate persona layout details first
+  const wrappedGoals = (persona.goals || []).slice(0, 3).map(g => {
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    return doc.splitTextToSize(`• ${g}`, 72);
+  });
+  const wrappedPains = (persona.painPoints || []).slice(0, 3).map(p => {
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    return doc.splitTextToSize(`• ${p}`, 72);
+  });
+
+  let projectedLeftY = y + 22;
+  wrappedGoals.forEach(gLines => {
+    projectedLeftY += (gLines.length * 4) + 1;
+  });
+
+  let projectedRightY = y + 22;
+  wrappedPains.forEach(pLines => {
+    projectedRightY += (pLines.length * 4) + 1;
+  });
+
+  const maxPersonaContentY = Math.max(projectedLeftY, projectedRightY);
+  const personaCardHeight = (maxPersonaContentY - y) + 4;
+
+  // Draw background card
   doc.setFillColor(248, 250, 252);
-  doc.rect(margin, y, contentWidth, 48, 'F');
+  doc.rect(margin, y, contentWidth, personaCardHeight, 'F');
   
   doc.setFillColor(139, 92, 246);
-  doc.rect(margin, y, 4, 48, 'F');
+  doc.rect(margin, y, 4, personaCardHeight, 'F');
 
+  // Draw Header info
   doc.setFont('Helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(15, 23, 42);
@@ -463,31 +623,65 @@ export const exportReportToPDF = (project: DBProject) => {
   doc.text('GOALS & DRIVERS', margin + 8, y + 16);
   doc.text('PAIN POINTS', margin + (contentWidth / 2) + 4, y + 16);
 
+  // Draw wrapped text
   doc.setFont('Helvetica', 'normal');
   doc.setTextColor(71, 85, 105);
-  let goalY = y + 22;
-  persona.goals?.slice(0, 3).forEach((g) => {
-    doc.text(`- ${g}`, margin + 8, goalY);
-    goalY += 5;
+  
+  let drawLeftY = y + 22;
+  wrappedGoals.forEach(gLines => {
+    doc.text(gLines, margin + 8, drawLeftY);
+    drawLeftY += (gLines.length * 4) + 1;
   });
 
-  let painY = y + 22;
-  persona.painPoints?.slice(0, 3).forEach((p) => {
-    doc.text(`- ${p}`, margin + (contentWidth / 2) + 4, painY);
-    painY += 5;
+  let drawRightY = y + 22;
+  wrappedPains.forEach(pLines => {
+    doc.text(pLines, margin + (contentWidth / 2) + 4, drawRightY);
+    drawRightY += (pLines.length * 4) + 1;
   });
 
-  y += 56;
+  y += personaCardHeight + 8;
 
   y = drawSectionHeader(doc, '6. Revenue Tiers & Projections', y);
 
-  // Revenue tiers
+  // Revenue Tiers
   const tierW = (contentWidth / 3) - 3;
-  report.revenueModels?.slice(0, 3).forEach((model, i) => {
+  
+  // Calculate max height for pricing cards
+  const preparedTiers = report.revenueModels?.slice(0, 3).map((model) => {
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(8);
+    const nameLines = doc.splitTextToSize(model.name, tierW - 8);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(14);
+    const pricingText = model.monthlyPricing || '$49/mo';
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(7);
+    const stratLines = doc.splitTextToSize(model.strategy || 'Value optimization model', tierW - 8);
+
+    const nameHeight = nameLines.length * 4;
+    const stratHeight = stratLines.length * 3.5;
+    const totalHeight = 10 + nameHeight + 8 + stratHeight + 6; // base offset + padding
+    
+    return {
+      model,
+      nameLines,
+      pricingText,
+      stratLines,
+      totalHeight
+    };
+  }) || [];
+
+  const maxTierHeight = Math.max(46, ...preparedTiers.map(t => t.totalHeight));
+
+  preparedTiers.forEach((tier, i) => {
     const tierX = margin + (i * (tierW + 4.5));
+    
+    // Draw background card with maxTierHeight
     doc.setFillColor(255, 255, 255);
     doc.setDrawColor(226, 232, 240);
-    doc.rect(tierX, y, tierW, 46, 'FD');
+    doc.rect(tierX, y, tierW, maxTierHeight, 'FD');
 
     // Accent line for Middle Tier
     if (i === 1) {
@@ -495,21 +689,27 @@ export const exportReportToPDF = (project: DBProject) => {
       doc.rect(tierX, y, tierW, 3, 'F');
     }
 
+    // Render name
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(15, 23, 42);
-    doc.text(model.name, tierX + 4, y + 10);
+    doc.text(tier.nameLines, tierX + 4, y + 10);
 
-    doc.setFontSize(14);
+    // Render pricing
+    const pricingY = y + 10 + (tier.nameLines.length * 4) + 2;
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(13); // Reduced slightly to avoid overflow
     doc.setTextColor(139, 92, 246);
-    doc.text(model.monthlyPricing || '$49/mo', tierX + 4, y + 20);
+    doc.text(tier.pricingText, tierX + 4, pricingY);
 
+    // Render strategy description
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(71, 85, 105);
-    const stratLines = doc.splitTextToSize(model.strategy || 'Value optimization model', tierW - 8);
-    doc.text(stratLines, tierX + 4, y + 27);
+    doc.text(tier.stratLines, tierX + 4, pricingY + 5);
   });
+
+  y += maxTierHeight + 10;
 
 
   // --- PAGE 7: MVP ROADMAP ---
@@ -532,35 +732,65 @@ export const exportReportToPDF = (project: DBProject) => {
     { title: `Phase 3: ${report.roadmap?.phase3?.title || 'Scale Tiers'}`, duration: report.roadmap?.phase3?.duration || '90 days', features: report.roadmap?.phase3?.features || [] }
   ];
 
-  phases.forEach((phase, i) => {
+  let currentRoadmapY = y + 10;
+  
+  const preparedPhases = phases.map((phase) => {
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(9.5);
+    const titleLines = doc.splitTextToSize(`${phase.title} (${phase.duration})`, contentWidth - 20);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    const wrappedFeatures = phase.features.slice(0, 3).map(feat => {
+      return doc.splitTextToSize(`• ${feat}`, contentWidth - 24);
+    });
+
+    let featuresHeight = 0;
+    wrappedFeatures.forEach(lines => {
+      featuresHeight += (lines.length * 4) + 1.5;
+    });
+    
+    const totalHeight = (titleLines.length * 4.5) + featuresHeight + 6;
+    return {
+      titleLines,
+      wrappedFeatures,
+      totalHeight
+    };
+  });
+
+  preparedPhases.forEach((phase, i) => {
     // Draw timeline circle node
     doc.setFillColor(139, 92, 246);
-    doc.circle(margin + 4, y + 3, 3, 'F');
+    doc.circle(margin + 4, currentRoadmapY + 3, 3.5, 'F');
     
     // Draw line connecting nodes
     if (i < 2) {
       doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(1);
-      doc.line(margin + 4, y + 6, margin + 4, y + 38);
+      doc.setLineWidth(1.2);
+      doc.line(margin + 4, currentRoadmapY + 6, margin + 4, currentRoadmapY + phase.totalHeight + 3);
     }
 
+    // Render title
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(9.5);
     doc.setTextColor(15, 23, 42);
-    doc.text(`${phase.title} (${phase.duration})`, margin + 14, y + 4);
+    doc.text(phase.titleLines, margin + 14, currentRoadmapY + 4);
 
+    // Render features
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105);
 
-    let featY = y + 10;
-    phase.features.slice(0, 3).forEach((feat) => {
-      doc.text(`- ${feat}`, margin + 14, featY);
-      featY += 5;
+    let featY = currentRoadmapY + 4 + (phase.titleLines.length * 4.5);
+    phase.wrappedFeatures.forEach((featLines) => {
+      doc.text(featLines, margin + 14, featY);
+      featY += (featLines.length * 4) + 1.5;
     });
 
-    y += 36;
+    currentRoadmapY += phase.totalHeight;
   });
+
+  y = currentRoadmapY + 4;
 
 
   // --- PAGE 8: INVESTMENT RECOMMENDATION ---
@@ -761,11 +991,25 @@ export const exportPitchDeckToPDF = (project: DBProject) => {
       doc.setTextColor(148, 163, 184);
       
       let cy = graphicY + 26;
-      doc.text(`1. ${report.competitors?.[0]?.name || 'CompPro'} - ${report.competitors?.[0]?.position || 'Leader'}`, graphicX + 10, cy);
-      doc.text(`2. ${report.competitors?.[1]?.name || 'FlowSaaS'} - ${report.competitors?.[1]?.position || 'Challenger'}`, graphicX + 10, cy + 8);
+      const comp1Name = report.competitors?.[0]?.name || 'CompPro';
+      const comp1Pos = report.competitors?.[0]?.position || 'Leader';
+      const comp1Text = `1. ${comp1Name} - ${comp1Pos}`;
+      
+      const comp2Name = report.competitors?.[1]?.name || 'FlowSaaS';
+      const comp2Pos = report.competitors?.[1]?.position || 'Challenger';
+      const comp2Text = `2. ${comp2Name} - ${comp2Pos}`;
+
+      const nameTrunc1 = comp1Text.length > 30 ? comp1Text.substring(0, 27) + '...' : comp1Text;
+      const nameTrunc2 = comp2Text.length > 30 ? comp2Text.substring(0, 27) + '...' : comp2Text;
+      
+      doc.text(nameTrunc1, graphicX + 10, cy);
+      doc.text(nameTrunc2, graphicX + 10, cy + 8);
       doc.setTextColor(139, 92, 246);
       doc.setFont('Helvetica', 'bold');
-      doc.text(`3. ${project.name} - Disruptor (AI Edge)`, graphicX + 10, cy + 16);
+      
+      const myText = `3. ${project.name} - Disruptor (AI Edge)`;
+      const myTrunc = myText.length > 30 ? myText.substring(0, 27) + '...' : myText;
+      doc.text(myTrunc, graphicX + 10, cy + 16);
     }
     else {
       doc.setTextColor(139, 92, 246);
