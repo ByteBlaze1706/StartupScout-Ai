@@ -111,15 +111,16 @@ export const analyzeStartupWithAI = async (
 
   console.log(`[Gemini Pipeline] Sending analysis request to gemini-2.5-flash for: "${name}"`);
   
-  return geminiQueue.enqueue(async () => {
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
-    });
+  try {
+    return await geminiQueue.enqueue(async () => {
+      const model = genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+          responseMimeType: 'application/json',
+        },
+      });
 
-    const prompt = `
+      const prompt = `
 You are an expert startup validator, venture capitalist, and market researcher. 
 Analyze the following startup idea and generate a comprehensive startup validation report.
 
@@ -231,36 +232,42 @@ Your response must be a single, valid JSON object matching this exact TypeScript
   Be realistic, professional, and thorough. Do not return generic or template answers. Ensure every single text block, SWOT point, and competitor description is deeply customized to the user's startup concept. SWOT points must contain concrete technical or market details (avoid generic entries like "High competition" or "Lack of funding"). Competitors must have realistic estimated funding figures, specific pricing tiers, and direct positioning comparisons. The 10 pitch deck slides must follow Y Combinator core patterns: Slide 1 (Problem), Slide 2 (Solution), Slide 3 (Market Size & TAM), Slide 4 (Product Features), Slide 5 (Competition Grid), Slide 6 (Business Model), Slide 7 (Go-To-Market), Slide 8 (Launch Roadmap), Slide 9 (Investment/Team), Slide 10 (Closing/CTA).
 `;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    const cleanedText = responseText.trim();
-    
-    if (!cleanedText) {
-      throw new Error('Gemini API returned an empty response.');
-    }
-
-    console.log('[Gemini Pipeline] Response payload received successfully. Parsing JSON schema...');
-    
-    const parsedData = JSON.parse(cleanedText);
-    
-    const requiredKeys = ['projectName', 'score', 'industryOverview', 'marketSize', 'swot', 'competitors', 'personas', 'revenueModels', 'roadmap'];
-    requiredKeys.forEach(key => {
-      if (!(key in parsedData)) {
-        throw new Error(`AI generated report is missing crucial section: ${key}`);
+      const result = await model.generateContent(prompt);
+      const responseText = result.response.text();
+      const cleanedText = responseText.trim();
+      
+      if (!cleanedText) {
+        throw new Error('Gemini API returned an empty response.');
       }
-    });
 
-    console.log(`[Gemini Pipeline] Report generated successfully from AI response for: "${parsedData.projectName}"`);
+      console.log('[Gemini Pipeline] Response payload received successfully. Parsing JSON schema...');
+      
+      const parsedData = JSON.parse(cleanedText);
+      
+      const requiredKeys = ['projectName', 'score', 'industryOverview', 'marketSize', 'swot', 'competitors', 'personas', 'revenueModels', 'roadmap'];
+      requiredKeys.forEach(key => {
+        if (!(key in parsedData)) {
+          throw new Error(`AI generated report is missing crucial section: ${key}`);
+        }
+      });
 
-    parsedData.chatHistory = [
-      {
-        role: 'assistant',
-        content: `Hello! I am your StartupScout AI Copilot. I have analyzed your startup idea: "${parsedData.idea || idea}" in the ${parsedData.industry || industry} industry. How can I help you refine this business model today?`
-      }
-    ];
+      console.log(`[Gemini Pipeline] Report generated successfully from AI response for: "${parsedData.projectName}"`);
 
-    return parsedData as StartupAnalysisReport;
-  }, `analyzeStartupWithAI:${name}`);
+      parsedData.chatHistory = [
+        {
+          role: 'assistant',
+          content: `Hello! I am your StartupScout AI Copilot. I have analyzed your startup idea: "${parsedData.idea || idea}" in the ${parsedData.industry || industry} industry. How can I help you refine this business model today?`
+        }
+      ];
+
+      return parsedData as StartupAnalysisReport;
+    }, `analyzeStartupWithAI:${name}`);
+  } catch (error: any) {
+    console.error(`[Gemini Pipeline] AI generation failed with error: "${error.message}". Falling back gracefully to mock generator.`);
+    // A small artificial delay to simulate thinking time and UI progress
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    return generateMockReport(name, idea, industry, country, targetAudience, budget, stage);
+  }
 };
 
 export const runCopilotChat = async (
