@@ -3,6 +3,97 @@ import { StartupAnalysisReport, generateMockReport } from './mockData';
 
 const apiKey = process.env.GEMINI_API_KEY || '';
 
+// Centralized Gemini client instance shared across all requests
+const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+
+// Centralized Request Queue for Gemini requests to enforce rate-limiting
+// and prevent parallel bursts in high-concurrency environments.
+class GeminiRequestQueue {
+  private queue: Array<{
+    fn: () => Promise<any>;
+    resolve: (value: any) => void;
+    reject: (reason: any) => void;
+    retries: number;
+    requestName: string;
+  }> = [];
+  private activeCount = 0;
+  private maxConcurrency = 1; // Queue execution sequentially to prevent parallel bursts
+  private delayBetweenRequestsMs = 1000; // Rate-limit protection delay
+
+  async enqueue<T>(fn: () => Promise<T>, requestName: string): Promise<T> {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ fn, resolve, reject, retries: 0, requestName });
+      this.processNext();
+    });
+  }
+
+  private async processNext() {
+    if (this.activeCount >= this.maxConcurrency || this.queue.length === 0) {
+      return;
+    }
+
+    const item = this.queue.shift();
+    if (!item) return;
+
+    this.activeCount++;
+    try {
+      const result = await this.executeWithRetry(item.fn, item.retries, item.requestName);
+      item.resolve(result);
+    } catch (error) {
+      item.reject(error);
+    } finally {
+      this.activeCount--;
+      // Ensure a protection gap between consecutive API requests
+      setTimeout(() => {
+        this.processNext();
+      }, this.delayBetweenRequestsMs);
+    }
+  }
+
+  private async executeWithRetry<T>(
+    fn: () => Promise<T>,
+    currentRetry: number,
+    requestName: string
+  ): Promise<T> {
+    const maxRetries = 5;
+    const baseDelayMs = 2000;
+
+    try {
+      return await fn();
+    } catch (error: any) {
+      // 4. Log exact Gemini error responses for diagnostics (including postgrest/system stack trace)
+      const rawErrorLog = JSON.stringify(error, Object.getOwnPropertyNames(error));
+      console.error(`[Gemini Queue] Raw API Error during ${requestName}:`, rawErrorLog);
+
+      const errMsg = error.message || '';
+      const isRateLimit = errMsg.includes('429') || errMsg.includes('exhausted') || errMsg.includes('limit') || errMsg.includes('ResourceExhausted');
+      const isServerBusy = errMsg.includes('503') || errMsg.includes('Service Unavailable') || errMsg.includes('overloaded');
+
+      if ((isRateLimit || isServerBusy) && currentRetry < maxRetries) {
+        // 1 & 2. Exponential backoff with jitter for 429/503 errors
+        const delay = baseDelayMs * Math.pow(2, currentRetry) + Math.random() * 1000;
+        console.warn(`[Gemini Queue] Rate limited/Server busy during ${requestName}. Retrying in ${(delay / 1000).toFixed(1)}s (Attempt ${currentRetry + 1}/${maxRetries})...`);
+        
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return this.executeWithRetry(fn, currentRetry + 1, requestName);
+      }
+
+      // If we exhausted retries or the error is not retryable, throw user-friendly messages
+      if (errMsg.includes('API key not valid') || errMsg.includes('API key')) {
+        throw new Error('Invalid Gemini API Key configured. Please verify your environment variables.');
+      } else if (isRateLimit || isServerBusy) {
+        throw new Error('Gemini API is currently experiencing high demand or rate limits. Please wait a moment and try again.');
+      } else if (errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('connect')) {
+        throw new Error('Network failure connecting to Gemini API. Please check your internet connection.');
+      } else {
+        throw new Error(`Gemini Validation Failure: ${errMsg || 'Unexpected response pattern from model'}`);
+      }
+    }
+  }
+}
+
+const geminiQueue = new GeminiRequestQueue();
+
 export const analyzeStartupWithAI = async (
   name: string,
   idea: string,
@@ -12,19 +103,15 @@ export const analyzeStartupWithAI = async (
   budget: string,
   stage: string
 ): Promise<StartupAnalysisReport> => {
-  if (!apiKey) {
+  if (!apiKey || !genAI) {
     console.warn('GEMINI_API_KEY is not defined. Falling back to mock generator.');
-    // Add artificial delay to simulate AI agents working
     await new Promise((resolve) => setTimeout(resolve, 3000));
     return generateMockReport(name, idea, industry, country, targetAudience, budget, stage);
   }
 
   console.log(`[Gemini Pipeline] Sending analysis request to gemini-2.5-flash for: "${name}"`);
-  console.log(`[Gemini Pipeline] Startup Idea Description: "${idea}"`);
-
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    // Use gemini-2.5-flash for premium response speed and high token capacity
+  
+  return geminiQueue.enqueue(async () => {
     const model = genAI.getGenerativeModel({
       model: 'gemini-2.5-flash',
       generationConfig: {
@@ -154,10 +241,8 @@ Your response must be a single, valid JSON object matching this exact TypeScript
 
     console.log('[Gemini Pipeline] Response payload received successfully. Parsing JSON schema...');
     
-    // Parse the output as JSON
     const parsedData = JSON.parse(cleanedText);
     
-    // Verify required sections exist
     const requiredKeys = ['projectName', 'score', 'industryOverview', 'marketSize', 'swot', 'competitors', 'personas', 'revenueModels', 'roadmap'];
     requiredKeys.forEach(key => {
       if (!(key in parsedData)) {
@@ -167,7 +252,6 @@ Your response must be a single, valid JSON object matching this exact TypeScript
 
     console.log(`[Gemini Pipeline] Report generated successfully from AI response for: "${parsedData.projectName}"`);
 
-    // Add empty chatHistory initialized
     parsedData.chatHistory = [
       {
         role: 'assistant',
@@ -176,26 +260,7 @@ Your response must be a single, valid JSON object matching this exact TypeScript
     ];
 
     return parsedData as StartupAnalysisReport;
-  } catch (error: any) {
-    console.error('[Gemini Pipeline] Generation failure:', error);
-    const errMsg = error.message || '';
-    if (errMsg.includes('API key not valid') || errMsg.includes('API key')) {
-      throw new Error('Invalid Gemini API Key configured. Please verify your environment variables.');
-    } else if (
-      errMsg.includes('exhausted') || 
-      errMsg.includes('429') || 
-      errMsg.includes('503') || 
-      errMsg.includes('Service Unavailable') || 
-      errMsg.includes('demand') || 
-      errMsg.includes('limit')
-    ) {
-      throw new Error('Gemini API is currently experiencing high demand or rate limits. Please wait a moment and try again.');
-    } else if (errMsg.includes('fetch') || errMsg.includes('network') || errMsg.includes('connect')) {
-      throw new Error('Network failure connecting to Gemini API. Please check your internet connection.');
-    } else {
-      throw new Error(`Gemini Validation Failure: ${errMsg || 'Unexpected response pattern from model'}`);
-    }
-  }
+  }, `analyzeStartupWithAI:${name}`);
 };
 
 export const runCopilotChat = async (
@@ -203,8 +268,7 @@ export const runCopilotChat = async (
   chatHistory: { role: 'user' | 'assistant'; content: string }[],
   userMessage: string
 ): Promise<string> => {
-  if (!apiKey) {
-    // Mock assistant response
+  if (!apiKey || !genAI) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
     const normalizedMsg = userMessage.toLowerCase();
     
@@ -221,11 +285,9 @@ export const runCopilotChat = async (
     return `That's a great question about ${report.projectName}. Looking at the market research in the ${report.industry} sector, the ${report.marketSize} market size and ${report.growthRate} growth indicate a solid window of opportunity. To differentiate from competitors like ${report.competitors[0]?.name || 'existing players'}, we must double down on ${report.opportunities[0]}. What other areas of the business model can I clarify?`;
   }
 
-  try {
-    const genAI = new GoogleGenerativeAI(apiKey);
+  return geminiQueue.enqueue(async () => {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
-    // Build context
     const context = `
 You are the StartupScout AI Copilot. You are discussing a startup validation report with the founder.
 Here is the startup information:
@@ -241,13 +303,11 @@ Here is the startup information:
 Answer the user's question concisely, referencing the report data where appropriate. Keep your tone supportive, analytical, and professional.
 `;
 
-    // Construct history for Gemini API
     const formattedHistory = chatHistory.slice(-10).map(item => ({
       role: item.role === 'user' ? 'user' : 'model',
       parts: [{ text: item.content }]
     }));
 
-    // Start a chat session
     const chatSession = model.startChat({
       history: [
         { role: 'user', parts: [{ text: context }] },
@@ -258,8 +318,5 @@ Answer the user's question concisely, referencing the report data where appropri
 
     const response = await chatSession.sendMessage(userMessage);
     return response.response.text();
-  } catch (error: any) {
-    console.error('[Gemini Pipeline] Copilot generation failure:', error);
-    throw new Error(`AI Copilot connection failure: ${error.message || 'Connection error'}`);
-  }
+  }, `runCopilotChat:${report.projectName}`);
 };

@@ -204,6 +204,51 @@ export default function AnalyzePage() {
     setAgentProgress({ research: 0, competitor: 0, swot: 0, revenue: 0, roadmap: 0, pitch: 0 });
     setLogs(["[System] Booting secure multi-agent workflow runtime...", "[System] Connecting to Gemini neural analysis matrix..."]);
 
+    const maxRetries = 5;
+    const baseDelayMs = 3000;
+
+    const executeFetchWithRetry = async (payload: any, attempt: number): Promise<any> => {
+      let response: Response | null = null;
+      try {
+        response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Validation error');
+        }
+        return data;
+      } catch (err: any) {
+        const statusCode = response ? response.status : 0;
+        const errMsg = err.message || '';
+        const isRateLimitOrBusy = 
+          statusCode === 429 || 
+          statusCode === 503 || 
+          errMsg.includes('exhausted') || 
+          errMsg.includes('limit') || 
+          errMsg.includes('busy') || 
+          errMsg.includes('demand') ||
+          errMsg.includes('Too many analysis requests') ||
+          errMsg.includes('rate limit') ||
+          errMsg.includes('ResourceExhausted') ||
+          errMsg.includes('temporary');
+
+        if (isRateLimitOrBusy && attempt < maxRetries) {
+          const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 1000;
+          setLogs(prev => [
+            ...prev,
+            `[System] System busy, retrying in ${(delay / 1000).toFixed(1)}s (Attempt ${attempt + 1}/${maxRetries})...`
+          ]);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return executeFetchWithRetry(payload, attempt + 1);
+        }
+        throw err;
+      }
+    };
+
     try {
       const budgetFormatted = formatCurrency(formData.budget);
       const postPayload = {
@@ -211,17 +256,7 @@ export default function AnalyzePage() {
         budget: budgetFormatted
       };
 
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(postPayload)
-      });
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Validation error');
-      }
-
+      const data = await executeFetchWithRetry(postPayload, 0);
       setApiResult(data);
     } catch (err: any) {
       console.error('API call failed:', err);
