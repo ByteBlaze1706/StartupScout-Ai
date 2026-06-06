@@ -55,8 +55,8 @@ class GeminiRequestQueue {
     currentRetry: number,
     requestName: string
   ): Promise<T> {
-    const maxRetries = 5;
-    const baseDelayMs = 2000;
+    const maxRetries = 1; // Fast-fail for serverless compatibility (relying on client-side retries)
+    const baseDelayMs = 1000;
 
     try {
       return await fn();

@@ -33,15 +33,13 @@ async function runLiveAnalysis() {
 
   const page = await browser.newPage();
   
-  // Track console errors
+  // Track console logs
   page.on('console', msg => {
-    if (msg.type() === 'error') {
-      console.log(`[Console Error]: ${msg.text()}`);
-    }
+    console.log(`[Browser Console]: [${msg.type().toUpperCase()}] ${msg.text()}`);
   });
 
   page.on('pageerror', err => {
-    console.log(`[Page Error]: ${err.message}`);
+    console.log(`[Browser Page Error]: ${err.message}`);
   });
 
   try {
@@ -124,6 +122,13 @@ async function runLiveAnalysis() {
     
   } catch (error) {
     console.error('ERROR during live analysis:', error.message || error);
+    try {
+      const bodyText = await page.evaluate(() => document.body.innerText);
+      console.log('\n--- PAGE BODY ON FAILURE ---');
+      console.log(bodyText.substring(0, 3000));
+    } catch (inner) {
+      console.log('Could not retrieve page body:', inner.message);
+    }
     process.exit(1);
   } finally {
     await browser.close();

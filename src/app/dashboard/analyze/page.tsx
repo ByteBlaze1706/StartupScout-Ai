@@ -227,6 +227,8 @@ export default function AnalyzePage() {
         const isRateLimitOrBusy = 
           statusCode === 429 || 
           statusCode === 503 || 
+          statusCode === 504 || 
+          statusCode === 502 || 
           errMsg.includes('exhausted') || 
           errMsg.includes('limit') || 
           errMsg.includes('busy') || 
@@ -234,7 +236,10 @@ export default function AnalyzePage() {
           errMsg.includes('Too many analysis requests') ||
           errMsg.includes('rate limit') ||
           errMsg.includes('ResourceExhausted') ||
-          errMsg.includes('temporary');
+          errMsg.includes('temporary') ||
+          errMsg.includes('timeout') ||
+          errMsg.includes('504') ||
+          errMsg.includes('502');
 
         if (isRateLimitOrBusy && attempt < maxRetries) {
           const delay = baseDelayMs * Math.pow(2, attempt) + Math.random() * 1000;
