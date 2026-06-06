@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { serverDb } from '@/lib/serverDb';
 import { analyzeStartupWithAI } from '@/lib/gemini';
-import { isRateLimited } from '@/lib/rateLimiter';
+import { checkRateLimit, incrementRateLimit } from '@/lib/rateLimiter';
 import { z } from 'zod';
 
 const analyzeSchema = z.object({
@@ -35,8 +35,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized. Please log in first.' }, { status: 401 });
     }
 
-    // 2. Rate Limiting: Max 3 analyses per 15 minutes
-    const limitResult = isRateLimited(req, 3, 15 * 60 * 1000, 'analyze');
+    // 2. Rate Limiting: Max 10 analyses per 15 minutes (check only, don't increment yet)
+    const limitResult = checkRateLimit(req, 10, 15 * 60 * 1000, 'analyze');
     if (limitResult.limited) {
       return NextResponse.json(
         { error: 'Too many analysis requests. Please wait a few minutes before trying again.' },
@@ -65,6 +65,9 @@ export async function POST(req: NextRequest) {
       budget,
       stage
     );
+
+    // 5. Success! Increment rate limit counter
+    incrementRateLimit(req, 10, 15 * 60 * 1000, 'analyze');
 
     return NextResponse.json(report);
   } catch (error: any) {
