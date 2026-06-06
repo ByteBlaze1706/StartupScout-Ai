@@ -106,7 +106,7 @@ async function runLiveAnalysis() {
     console.log('Agent console successfully loaded. Analysis queue in progress...');
     
     console.log('Waiting for AI agents to compile live project validation (estimated ~50s)...');
-    await page.waitForFunction(() => window.location.pathname.includes('/projects/proj_'), { timeout: 90000 });
+    await page.waitForFunction(() => window.location.pathname.includes('/projects/proj_'), { timeout: 180000 });
     
     const detailsUrl = page.url();
     console.log(`\n🎉 ANALYSIS SUCCESSFUL!`);
