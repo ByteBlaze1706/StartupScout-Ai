@@ -60,7 +60,7 @@ Maintain a centralized repository of startup validation reports.
 
 * Next.js
 * React
-* TypeScript
+* JavaScript
 * Tailwind CSS
 
 ### Backend

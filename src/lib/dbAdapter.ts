@@ -1,5 +1,3 @@
-import { StartupAnalysisReport } from './mockData';
-
 export interface UserRecord {
   id: string;
   name: string;
@@ -22,7 +20,7 @@ export interface ProjectRecord {
   budget: string;
   stage: string;
   createdAt: string;
-  report: StartupAnalysisReport;
+  report: any;
   exportCount?: number;
 }
 
