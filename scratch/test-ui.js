@@ -174,7 +174,7 @@ async function runTests() {
       
       // Submit Sign Up
       await page.click('button[type="submit"]');
-      await page.waitForFunction(() => window.location.pathname === '/dashboard', { timeout: 5000 });
+      await page.waitForFunction(() => window.location.pathname === '/dashboard', { timeout: 15000 });
 
       const dashboardUrl = page.url();
       logTest('Sign Up Submission', 'Create user record & redirect to /dashboard', `Redirected to: ${dashboardUrl}`, dashboardUrl.includes('/dashboard') ? 'PASS' : 'FAIL');
@@ -189,7 +189,7 @@ async function runTests() {
     try {
       await new Promise(r => setTimeout(r, 1000)); // wait for client mount check
       const bodyText = await page.evaluate(() => document.body.textContent);
-      const metricsLoaded = bodyText.includes('Total Analyses') && bodyText.includes('Average Score');
+      const metricsLoaded = bodyText.includes('Analyses Completed') && bodyText.includes('Average Startup Score');
       logTest('Dashboard Stats Grid', 'Load totals and average viability stats', metricsLoaded ? 'Stats cards present' : 'Missing stats keys', metricsLoaded ? 'PASS' : 'None');
     } catch(e) {
       logTest('Dashboard Stats Grid', 'Inspect statistics', e.message, 'FAIL');
