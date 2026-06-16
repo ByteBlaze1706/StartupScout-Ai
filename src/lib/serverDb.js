@@ -4,9 +4,37 @@ import { SupabaseDbAdapter } from './supabaseDbAdapter';
 
 import { supabase } from './supabase';
 
-// Instantiate the active database adapter dynamically.
-// Falls back to FileDbAdapter when Supabase credentials are not configured in local development.
-const db = supabase ? new SupabaseDbAdapter() : new FileDbAdapter();
+const supabaseDb = supabase ? new SupabaseDbAdapter() : null;
+const fileDb = new FileDbAdapter();
+
+let useFallback = !supabaseDb;
+
+const db = new Proxy({}, {
+  get(target, prop) {
+    return async (...args) => {
+      if (!useFallback) {
+        try {
+          return await supabaseDb[prop](...args);
+        } catch (err) {
+          const errMsg = err.message || '';
+          const isConnectionError = 
+            errMsg.includes('fetch failed') || 
+            errMsg.includes('ENOTFOUND') || 
+            errMsg.includes('connect') ||
+            errMsg.includes('client not initialized');
+          
+          if (isConnectionError) {
+            console.warn(`[Database Fallback] Supabase failed on "${prop}". Falling back to FileDbAdapter. Error:`, errMsg);
+            useFallback = true;
+          } else {
+            throw err;
+          }
+        }
+      }
+      return await fileDb[prop](...args);
+    };
+  }
+});
 
 // Cryptographic Password Hashing (scrypt)
 const generateSalt = () => {

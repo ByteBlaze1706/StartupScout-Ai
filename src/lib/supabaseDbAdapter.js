@@ -84,7 +84,7 @@ export class SupabaseDbAdapter {
   async getUserByEmail(email) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase.
-    from('users').
+    from('scout_users').
     select('*').
     eq('email', email.toLowerCase().trim()).
     maybeSingle();
@@ -99,7 +99,7 @@ export class SupabaseDbAdapter {
   async getUserById(id) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase.
-    from('users').
+    from('scout_users').
     select('*').
     eq('id', id).
     maybeSingle();
@@ -114,7 +114,7 @@ export class SupabaseDbAdapter {
   async createUser(user) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase.
-    from('users').
+    from('scout_users').
     insert(mapUserToDb(user));
 
     if (error) {
@@ -126,7 +126,7 @@ export class SupabaseDbAdapter {
   async updateUser(user) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase.
-    from('users').
+    from('scout_users').
     update(mapUserToDb(user)).
     eq('id', user.id);
 
@@ -139,7 +139,7 @@ export class SupabaseDbAdapter {
   async deleteUser(userId) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase.
-    from('users').
+    from('scout_users').
     delete().
     eq('id', userId);
 
@@ -152,7 +152,7 @@ export class SupabaseDbAdapter {
   async getUserByResetToken(token) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase.
-    from('users').
+    from('scout_users').
     select('*').
     eq('reset_token', token).
     maybeSingle();
@@ -168,7 +168,7 @@ export class SupabaseDbAdapter {
   async getSession(sessionId) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase.
-    from('sessions').
+    from('scout_sessions').
     select('*').
     eq('id', sessionId).
     maybeSingle();
@@ -183,7 +183,7 @@ export class SupabaseDbAdapter {
   async createSession(session) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase.
-    from('sessions').
+    from('scout_sessions').
     upsert(mapSessionToDb(session));
 
     if (error) {
@@ -195,7 +195,7 @@ export class SupabaseDbAdapter {
   async deleteSession(sessionId) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase.
-    from('sessions').
+    from('scout_sessions').
     delete().
     eq('id', sessionId);
 
@@ -208,7 +208,7 @@ export class SupabaseDbAdapter {
   async getAllSessions() {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase.
-    from('sessions').
+    from('scout_sessions').
     select('*');
 
     if (error) {
@@ -222,7 +222,7 @@ export class SupabaseDbAdapter {
     if (!supabase) throw new Error('Supabase client not initialized');
     const now = new Date().toISOString();
     const { error, count } = await supabase.
-    from('sessions').
+    from('scout_sessions').
     delete({ count: 'exact' }).
     lt('expires_at', now);
 
@@ -237,7 +237,7 @@ export class SupabaseDbAdapter {
   async getProjectById(projectId) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase.
-    from('projects').
+    from('scout_projects').
     select('*').
     eq('id', projectId).
     maybeSingle();
@@ -252,7 +252,7 @@ export class SupabaseDbAdapter {
   async getProjectsByUserId(userId) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { data, error } = await supabase.
-    from('projects').
+    from('scout_projects').
     select('*').
     eq('user_id', userId);
 
@@ -266,7 +266,7 @@ export class SupabaseDbAdapter {
   async saveProject(project) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase.
-    from('projects').
+    from('scout_projects').
     upsert(mapProjectToDb(project));
 
     if (error) {
@@ -278,7 +278,7 @@ export class SupabaseDbAdapter {
   async deleteProject(projectId) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase.
-    from('projects').
+    from('scout_projects').
     delete().
     eq('id', projectId);
 
@@ -291,7 +291,7 @@ export class SupabaseDbAdapter {
   async deleteProjectsByUserId(userId) {
     if (!supabase) throw new Error('Supabase client not initialized');
     const { error } = await supabase.
-    from('projects').
+    from('scout_projects').
     delete().
     eq('user_id', userId);
 

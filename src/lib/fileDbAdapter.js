@@ -8,7 +8,8 @@ import path from 'path';
 
 
 
-const DB_PATH = path.join(process.cwd(), 'database.json');
+const isVercel = process.env.VERCEL || process.env.NOW_BUILDER;
+const DB_PATH = isVercel ? '/tmp/database.json' : path.join(process.cwd(), 'database.json');
 
 export class FileDbAdapter {
   initDb() {
